@@ -3,45 +3,9 @@ MRuby::Gem::Specification.new 'mruby-bin-picoirb' do |spec|
   spec.author  = 'HASUMI Hitoshi'
   spec.summary = 'picoirb executable'
   spec.add_dependency 'mruby-pico-compiler', github: 'hasumikin/mruby-pico-compiler'
+  spec.add_dependency 'mruby-mrubyc', github: 'hasumikin/mruby-mrubyc'
 
-  mrubyc_dir = "#{build.gem_clone_dir}/mrubyc"
-  spec.cc.include_paths << "#{mrubyc_dir}/src"
-
-  mrubyc_srcs = %w(alloc    c_math     c_range   console  keyvalue  rrt0    vm
-                   c_array  c_numeric  c_string  error    load      symbol
-                   c_hash   c_object   class     global   value   hal_posix/hal)
-  mrubyc_objs = mrubyc_srcs.map do |src|
-    objfile("#{build_dir}/tools/mrubyc/src/#{src}")
-  end
-
-  mrubyc_objs.each_with_index do |mrubyc_obj, index|
-    file mrubyc_obj => "#{mrubyc_dir}/src/#{mrubyc_srcs[index]}.c" do |f|
-      cc.run f.name, "#{mrubyc_dir}/src/#{mrubyc_srcs[index]}.c"
-    end
-    file "#{mrubyc_dir}/src/#{mrubyc_srcs[index]}.c" => mrubyc_dir
-  end
-
-  directory build.gem_clone_dir
-
-  file mrubyc_dir => build.gem_clone_dir do
-    unless Dir.exists? mrubyc_dir
-      FileUtils.cd build.gem_clone_dir do
-        sh "git clone -b mrubyc3 https://github.com/mrubyc/mrubyc.git"
-      end
-    end
-  end
-
-  mrblib_obj = "#{build_dir}/tools/mrubyc/mrblib.o"
-
-  file mrblib_obj => "#{mrubyc_dir}/src/mrblib.c" do |f|
-    cc.run f.name, f.prerequisites.first
-  end
-
-  file "#{mrubyc_dir}/src/mrblib.c" => mrubyc_dir do |f|
-    mrblib_sources = Dir.glob("#{mrubyc_dir}/mrblib/*.rb").join(' ')
-    sh "#{build.mrbcfile} -B mrblib_bytecode -o #{mrubyc_dir}/src/mrblib.c #{mrblib_sources}"
-  end
-
+  spec.cc.include_paths << "#{build.gems['mruby-mrubyc'].clone.dir}/repos/mrubyc/src"
 
   pico_compiler_srcs = %w(common compiler dump generator mrbgem my_regex
                           node regex scope stream token tokenizer)
@@ -70,15 +34,24 @@ MRuby::Gem::Specification.new 'mruby-bin-picoirb' do |spec|
     end
   end
 
+  mrubyc_dir = "#{build.gems['mruby-mrubyc'].dir}/repos/mrubyc"
+  mrblib_obj = "#{build.gems['mruby-mrubyc'].build_dir}/src/mrblib.o"
+  file mrblib_obj => "#{mrubyc_dir}/src/mrblib.c" do |f|
+    cc.run f.name, f.prerequisites.first
+  end
+
+  file "#{mrubyc_dir}/src/mrblib.c" do |f|
+    mrblib_sources = Dir.glob("#{mrubyc_dir}/mrblib/*.rb").join(' ')
+    sh "#{build.mrbcfile} -B mrblib_bytecode -o #{mrubyc_dir}/src/mrblib.c #{mrblib_sources}"
+  end
+
   exec = exefile("#{build.build_dir}/bin/picoirb")
 
-  objs = mrubyc_objs +
-         pico_compiler_objs +
-         [mrblib_obj] +
-         picoirb_objs
-
-  file exec => objs do |f|
-    build.linker.run f.name, f.prerequisites
+  file exec => pico_compiler_objs + [mrblib_obj] + picoirb_objs do |f|
+    mrubyc_objs = Dir.glob("#{build.gems['mruby-mrubyc'].build_dir}/src/**/*.o").reject do |o|
+      o.end_with? "mrblib.o"
+    end
+    build.linker.run f.name, f.prerequisites + mrubyc_objs
   end
 
   build.bins << 'picoirb'
