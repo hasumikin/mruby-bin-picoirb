@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include <mrubyc.h>
 
-#if defined(PICORBC_DEBUG) && !defined(MRBC_ALLOC_LIBC)
+#if defined(PICORUBY_DEBUG) && !defined(MRBC_ALLOC_LIBC)
   #include <alloc.c>
 #endif
 
