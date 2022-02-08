@@ -7,12 +7,6 @@ MRuby::Gem::Specification.new 'mruby-bin-picoirb' do |spec|
 
   spec.cc.include_paths << "#{build.gems['mruby-mrubyc'].clone.dir}/repos/mrubyc/src"
 
-  pico_compiler_srcs = %w(common compiler dump generator mrbgem my_regex
-                          node regex scope stream token tokenizer)
-  pico_compiler_objs = pico_compiler_srcs.map do |name|
-    objfile("#{build.gems['mruby-pico-compiler'].build_dir}/src/#{name}")
-  end
-
   picoirb_mrblib_rbs = Dir.glob("#{dir}/tools/picoirb/*.rb")
   picoirb_mrblib_srcs = picoirb_mrblib_rbs.map do |rb|
     rb.pathmap("%X.c")
@@ -34,24 +28,18 @@ MRuby::Gem::Specification.new 'mruby-bin-picoirb' do |spec|
     end
   end
 
-  mrubyc_dir = "#{build.gems['mruby-mrubyc'].dir}/repos/mrubyc"
-  mrblib_obj = "#{build.gems['mruby-mrubyc'].build_dir}/src/mrblib.o"
-  file mrblib_obj => "#{mrubyc_dir}/src/mrblib.c" do |f|
-    cc.run f.name, f.prerequisites.first
-  end
-
-  file "#{mrubyc_dir}/src/mrblib.c" do |f|
-    mrblib_sources = Dir.glob("#{mrubyc_dir}/mrblib/*.rb").join(' ')
-    sh "#{build.mrbcfile} -B mrblib_bytecode -o #{mrubyc_dir}/src/mrblib.c #{mrblib_sources}"
-  end
-
   exec = exefile("#{build.build_dir}/bin/picoirb")
 
-  file exec => pico_compiler_objs + [mrblib_obj] + picoirb_objs do |f|
-    mrubyc_objs = Dir.glob("#{build.gems['mruby-mrubyc'].build_dir}/src/**/*.o").reject do |o|
-      o.end_with? "mrblib.o"
-    end
-    build.linker.run f.name, f.prerequisites + mrubyc_objs
+  pico_compiler_objs = Rake::Task.tasks.select{ |t|
+    t.name.match? /mruby-pico-compiler.+\.o\z/
+  }.map(&:name).reject { |o| o.end_with? "parse.o" }
+
+  mrubyc_objs = Rake::Task.tasks.select{
+    |t| t.name.match? /mruby-mrubyc.+\.o\z/
+  }.map(&:name)
+
+  file exec => pico_compiler_objs + mrubyc_objs + picoirb_objs do |f|
+    build.linker.run f.name, f.prerequisites
   end
 
   build.bins << 'picoirb'
