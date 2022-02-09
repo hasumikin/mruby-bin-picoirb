@@ -5,7 +5,7 @@ MRuby::Gem::Specification.new 'mruby-bin-picoirb' do |spec|
   spec.add_dependency 'mruby-pico-compiler', github: 'hasumikin/mruby-pico-compiler'
   spec.add_dependency 'mruby-mrubyc', github: 'hasumikin/mruby-mrubyc'
 
-  spec.cc.include_paths << "#{build.gems['mruby-mrubyc'].clone.dir}/repos/mrubyc/src"
+  spec.cc.include_paths << "#{build.gems['mruby-mrubyc'].dir}/repos/mrubyc/src"
 
   picoirb_mrblib_rbs = Dir.glob("#{dir}/tools/picoirb/*.rb")
   picoirb_mrblib_srcs = picoirb_mrblib_rbs.map do |rb|
