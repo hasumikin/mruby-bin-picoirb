@@ -80,7 +80,7 @@ c_sandbox_picorbc(mrb_vm *vm, mrb_value *v, int argc)
   p = Compiler_parseInitState(NODE_BOX_SIZE);
   if (tcb_sandbox) restore_p_state(p);
   StreamInterface *si = StreamInterface_new(NULL, (const char *)GET_STRING_ARG(1), STREAM_TYPE_MEMORY);
-  if (!Compiler_compile(p, si)) {
+  if (!Compiler_compile(p, si, NULL)) { /* TODO: context */
     SET_FALSE_RETURN();
     save_p_state(p);
     Compiler_parserStateFree(p);
