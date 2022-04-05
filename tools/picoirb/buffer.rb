@@ -1,22 +1,23 @@
-#
-# TODO
-# Array#my_insert should be replaced with #insert
-# after PicoRuby compiler implements f_rest_arg
-# so that `steep check` works
-#
-class Array
-  def my_insert(index, obj)
-    # @type var index: Integer
-    if index < 0
-      puts "Negative index doesn't work"
-      return
+if RUBY_ENGINE == "mruby/c"
+  class Array
+    def insert(index, *vals)
+      # @type var index: Integer
+      if index < 0
+        raise ArgumentError, "Negative index doesn't work"
+      end
+      tail = self[index, self.length]
+      vals.each_with_index do |val, i|
+        self[index + i] = val
+      end
+      if tail
+        tail_at = index + vals.count
+        tail.each do |elem|
+          self[tail_at] = elem
+          tail_at += 1
+        end
+      end
+      self
     end
-    new_array = self.dup
-    partial = self[index, self.length] || Array.new
-    partial.each_with_index do |elem, i|
-      self[i] = new_array[i + 1]
-    end
-    self[index] = obj
   end
 end
 
@@ -103,7 +104,7 @@ class Buffer
       when :ENTER
         new_line = line[@cursor[:x], 65535]
         @lines[@cursor[:y]] = line[0, @cursor[:x]].to_s
-        @lines.my_insert(@cursor[:y] + 1, new_line)
+        @lines.insert(@cursor[:y] + 1, new_line)
         head
         down
       when :BSPACE
