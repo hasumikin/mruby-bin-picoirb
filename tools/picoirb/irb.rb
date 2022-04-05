@@ -2,7 +2,6 @@
 
 case RUBY_ENGINE
 when "ruby"
-  require "ripper"
   require "io/console"
   require_relative "./buffer.rb"
   class Sandbox
@@ -18,21 +17,19 @@ when "ruby"
     STDIN.noecho{ |input| input.read_nonblock(max) }
   end
   def sandbox_picorbc(script)
-    # TODO: upgrade picoirb to make `A::B` and `rescue => e` valid
-    #begin
-    #  RubyVM::InstructionSequence.compile(script)
-    #  $sandbox_result = eval script, $bind
-    #rescue => e
-    #  puts e.message
-    #  return false
-    #end
-    #true
-    if Ripper.sexp(script)
-      $sandbox_result = eval script, $bind
-    else
-      puts "Syntax error"
-      false
+    begin
+      RubyVM::InstructionSequence.compile(script)
+    rescue SyntaxError => e
+      puts e.message
+      return false
     end
+    begin
+      $sandbox_result = eval script, $bind
+    rescue => e
+      puts e.message
+      return false
+    end
+    true
   end
   def sandbox_resume
     true
@@ -67,6 +64,9 @@ end
 
 buffer = Buffer.new(PROMPT)
 
+sandbox_picorbc("_ = nil")
+sandbox_resume
+
 while true
   buffer.refresh_screen
   c = getch
@@ -94,7 +94,7 @@ while true
       else
         buffer.clear
         debug script
-        if sandbox_picorbc(script)
+        if sandbox_picorbc "_ = (#{script})"
           if sandbox_resume
             n = 0
             while sandbox_state != 0 do # 0: TASKSTATE_DORMANT == finished(?)
@@ -107,9 +107,9 @@ while true
             end
             print "=> "
             p sandbox_result
-          else
-            puts "Error: Compile failed"
           end
+        else
+          puts "Error: Compile failed"
         end
       end
     end

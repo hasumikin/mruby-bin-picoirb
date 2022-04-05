@@ -12,9 +12,7 @@ mrbc_tcb *tcb_sandbox;
 
 static ParserState *p;
 static unsigned int nlocals;
-static Symbol *symbol;
 static Lvar *lvar;
-static Literal *literal;
 static unsigned int sp;
 static unsigned int max_sp;
 static StringPool *current_string_pool;
@@ -23,15 +21,12 @@ void
 save_p_state(ParserState *p)
 {
   nlocals = p->scope->nlocals;
-  symbol  = p->scope->symbol;
   lvar    = p->scope->lvar;
-  literal = p->scope->literal;
   sp      = p->scope->sp;
+  if (p->verbose) printf("sp: %d\n", sp);
   max_sp  = p->scope->max_sp;
   current_string_pool    = p->current_string_pool;
-  p->scope->symbol       = NULL;
   p->scope->lvar         = NULL;
-  p->scope->literal      = NULL;
   p->current_string_pool = NULL;
 }
 
@@ -39,9 +34,7 @@ void
 restore_p_state(ParserState *p)
 {
   p->scope->nlocals = nlocals;
-  p->scope->symbol  = symbol;
   p->scope->lvar    = lvar;
-  p->scope->literal = literal;
   p->scope->sp      = sp;
   p->scope->max_sp  = max_sp;
   p->current_string_pool = current_string_pool;
@@ -78,6 +71,7 @@ void
 c_sandbox_picorbc(mrb_vm *vm, mrb_value *v, int argc)
 {
   p = Compiler_parseInitState(NODE_BOX_SIZE);
+  //p->verbose = true;
   if (tcb_sandbox) restore_p_state(p);
   StreamInterface *si = StreamInterface_new(NULL, (const char *)GET_STRING_ARG(1), STREAM_TYPE_MEMORY);
   if (!Compiler_compile(p, si, NULL)) { /* TODO: context */
