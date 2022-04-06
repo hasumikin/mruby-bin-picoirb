@@ -14,7 +14,6 @@ static ParserState *p;
 static unsigned int nlocals;
 static Lvar *lvar;
 static unsigned int sp;
-static unsigned int max_sp;
 static StringPool *current_string_pool;
 
 void
@@ -24,7 +23,6 @@ save_p_state(ParserState *p)
   lvar    = p->scope->lvar;
   sp      = p->scope->sp;
   if (p->verbose) printf("sp: %d\n", sp);
-  max_sp  = p->scope->max_sp;
   current_string_pool    = p->current_string_pool;
   p->scope->lvar         = NULL;
   p->current_string_pool = NULL;
@@ -36,7 +34,6 @@ restore_p_state(ParserState *p)
   p->scope->nlocals = nlocals;
   p->scope->lvar    = lvar;
   p->scope->sp      = sp;
-  p->scope->max_sp  = max_sp;
   p->current_string_pool = current_string_pool;
 }
 
