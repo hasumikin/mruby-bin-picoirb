@@ -110,7 +110,7 @@ default_sigint(void)
 }
 
 void
-c_terminate_sandbox(mrb_vm *vm, mrb_value *v, int argc)
+c_terminate_irb(mrb_vm *vm, mrb_value *v, int argc)
 {
   default_sigint();
   raise(SIGINT);
@@ -123,7 +123,7 @@ main(int argc, char *argv[])
   mrbc_init(heap, HEAP_SIZE);
   mrbc_define_method(0, mrbc_class_object, "getch", c_getch);
   mrbc_define_method(0, mrbc_class_object, "gets_nonblock", c_gets_nonblock);
-  mrbc_define_method(0, mrbc_class_object, "terminate_sandbox", c_terminate_sandbox);
+  mrbc_define_method(0, mrbc_class_object, "terminate_irb", c_terminate_irb);
   SANDBOX_INIT();
   create_sandbox();
   mrbc_create_task(buffer, 0);

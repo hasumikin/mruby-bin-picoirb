@@ -4,68 +4,76 @@ case RUBY_ENGINE
 when "ruby"
   require "io/console"
   require_relative "./buffer.rb"
+
   class Sandbox
-    def bind
-      binding
+    def initialize
+      @binding = binding
+      @result = nil
+      @state = 0
+    end
+
+    attr_reader :result, :state
+
+    def compile(script)
+      begin
+        RubyVM::InstructionSequence.compile(script)
+      rescue SyntaxError => e
+        puts e.message
+        return false
+      end
+      begin
+        @result = eval "_ = (#{script})", @binding
+      rescue => e
+        puts e.message
+        return false
+      end
+      true
+    end
+
+    def resume
+      true
+    end
+
+    def exit
     end
   end
-  $bind = Sandbox.new.bind
+
   def getch
     STDIN.getch.ord
   end
+
   def gets_nonblock(max)
     STDIN.noecho{ |input| input.read_nonblock(max) }
   end
-  def sandbox_picorbc(script)
-    begin
-      RubyVM::InstructionSequence.compile(script)
-    rescue SyntaxError => e
-      puts e.message
-      return false
-    end
-    begin
-      $sandbox_result = eval script, $bind
-    rescue => e
-      puts e.message
-      return false
-    end
-    true
-  end
-  def sandbox_resume
-    true
-  end
-  def sandbox_result
-    $sandbox_result
-  end
-  def sandbox_state
-    0
-  end
-  def terminate_sandbox
+
+  def terminate_irb
     exit
   end
-  def debug(text)
-    #`echo "#{text}\n" > /dev/pts/8`
-  end
+
 when "mruby/c"
-  def debug(text)
-  end
   while !$buffer_lock
     relinquish
   end
 end
 
+def debug(text)
+  #`echo "#{text}\n" > /dev/pts/8`
+end
+
 TIMEOUT = 10_000 # 10 sec
 PROMPT = "picoirb"
 
-def exit_irb
+def exit_irb(sandbox)
   puts "\nbye"
-  terminate_sandbox
+  sandbox.exit
+  terminate_irb
 end
 
 buffer = Buffer.new(PROMPT)
 
-sandbox_picorbc("_ = nil")
-sandbox_resume
+sandbox = Sandbox.new
+sandbox.compile("_ = nil")
+sandbox.resume
 
 while true
   buffer.refresh_screen
@@ -75,7 +83,7 @@ while true
     buffer.clear
     buffer.adjust_screen
   when 4 # Ctrl-D
-    exit_irb
+    exit_irb(sandbox)
     break
   when 9
     buffer.put :TAB
@@ -85,7 +93,7 @@ while true
     when ""
       puts
     when "quit", "exit"
-      exit_irb
+      exit_irb(sandbox)
       break
     else
       buffer.adjust_screen
@@ -94,22 +102,20 @@ while true
       else
         buffer.clear
         debug script
-        if sandbox_picorbc "_ = (#{script})"
-          if sandbox_resume
+        if sandbox.compile(script)
+          if sandbox.resume
             n = 0
-            while sandbox_state != 0 do # 0: TASKSTATE_DORMANT == finished(?)
+            while sandbox.state != 0 do # 0: TASKSTATE_DORMANT == finished(?)
               sleep_ms 50
               n += 50
               if n > TIMEOUT
-                puts "Error: Timeout (sandbox_state: #{sandbox_state})"
+                puts "Error: Timeout (sandbox.state: #{sandbox.state})"
                 break
               end
             end
             print "=> "
-            p sandbox_result
+            p sandbox.result
           end
-        else
-          puts "Error: Compile failed"
         end
       end
     end
