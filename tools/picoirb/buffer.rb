@@ -104,7 +104,7 @@ class Buffer
       when :ENTER
         new_line = line[@cursor[:x], 65535]
         @lines[@cursor[:y]] = line[0, @cursor[:x]].to_s
-        @lines.insert(@cursor[:y] + 1, new_line)
+        @lines.insert(@cursor[:y] + 1, new_line) if new_line
         head
         down
       when :BSPACE
