@@ -1,16 +1,19 @@
 if RUBY_ENGINE == "mruby/c"
+  class Integer
+    alias to_int to_i
+  end
   class Array
     def insert(index, *vals)
-      # @type var index: Integer
-      if index < 0
+      index_int = index.to_int
+      if index_int < 0
         raise ArgumentError, "Negative index doesn't work"
       end
-      tail = self[index, self.length]
+      tail = self[index_int, self.length]
       vals.each_with_index do |val, i|
-        self[index + i] = val
+        self[index_int + i] = val
       end
       if tail
-        tail_at = index + vals.count
+        tail_at = index_int + vals.count
         tail.each do |elem|
           self[tail_at] = elem
           tail_at += 1
