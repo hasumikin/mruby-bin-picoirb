@@ -3,6 +3,7 @@
 case RUBY_ENGINE
 when "ruby"
   require "io/console"
+  require_relative "./terminal.rb"
   require_relative "./buffer.rb"
 
   class Sandbox
@@ -38,14 +39,6 @@ when "ruby"
     end
   end
 
-  def getch
-    STDIN.getch.ord
-  end
-
-  def gets_nonblock(max)
-    STDIN.noecho{ |input| input.read_nonblock(max) }
-  end
-
   def terminate_irb
     exit
   end
@@ -56,52 +49,31 @@ when "mruby/c"
   end
 end
 
-def debug(text)
-  #`echo "#{text}\n" > /dev/pts/8`
-end
-
 TIMEOUT = 10_000 # 10 sec
 PROMPT = "picoirb"
 
-def exit_irb(sandbox)
-  puts "\nbye"
-  sandbox.exit
-  terminate_irb
-end
-
-buffer = Buffer.new(PROMPT)
+terminal = Terminal.new(:line)
+terminal.prompt = PROMPT
 
 sandbox = Sandbox.new
-sandbox.compile("_ = nil")
+sandbox.compile("nil") # _ = nil
 sandbox.resume
 
-while true
-  buffer.refresh_screen
-  c = getch
+terminal.start do |buffer, c|
   case c
-  when 3 # Ctrl-C
-    buffer.clear
-    buffer.adjust_screen
-  when 4 # Ctrl-D
-    exit_irb(sandbox)
-    break
-  when 9
-    buffer.put :TAB
   when 10, 13
     script = buffer.dump.chomp
     case script
     when ""
       puts
     when "quit", "exit"
-      exit_irb(sandbox)
       break
     else
-      buffer.adjust_screen
       if buffer.lines[-1][-1] == "\\"
         buffer.put :ENTER
       else
+        terminal.adjust_screen
         buffer.clear
-        debug script
         if sandbox.compile(script)
           if sandbox.resume
             n = 0
@@ -110,7 +82,6 @@ while true
               n += 50
               if n > TIMEOUT
                 puts "Error: Timeout (sandbox.state: #{sandbox.state})"
-                break
               end
             end
             print "=> "
@@ -119,25 +90,47 @@ while true
         end
       end
     end
-  when 27 # ESC
-    case gets_nonblock(10)
-    when "[A"
-      buffer.put :UP
-    when "[B"
-      buffer.put :DOWN
-    when "[C"
-      buffer.put :RIGHT
-    when "[D"
-      buffer.put :LEFT
-    else
-      break
-    end
-  when 8, 127 # 127 on UNIX
-    buffer.put :BSPACE
-  when 32..126
-    buffer.put c.chr
   else
-    # ignore
+    terminal.debug c
   end
-  debug buffer.cursor
 end
+
+puts "\nbye"
+sandbox.exit
+terminate_irb
+
+#while true
+#  terminal.refresh_screen
+#  c = getch
+#  case c
+#  when 3 # Ctrl-C
+#    terminal.clear
+#    terminal.adjust_screen
+#  when 4 # Ctrl-D
+#    exit_irb(sandbox)
+#    break
+#  when 9
+#    terminal.put :TAB
+#  when 10, 13
+#  when 27 # ESC
+#    case gets_nonblock(10)
+#    when "[A"
+#      terminal.put :UP
+#    when "[B"
+#      terminal.put :DOWN
+#    when "[C"
+#      terminal.put :RIGHT
+#    when "[D"
+#      terminal.put :LEFT
+#    else
+#      break
+#    end
+#  when 8, 127 # 127 on UNIX
+#    terminal.put :BSPACE
+#  when 32..126
+#    terminal.put c.chr
+#  else
+#    # ignore
+#  end
+#  debug terminal.cursor
+#end

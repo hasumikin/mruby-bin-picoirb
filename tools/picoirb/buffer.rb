@@ -25,36 +25,38 @@ if RUBY_ENGINE == "mruby/c"
 end
 
 class Buffer
-  def initialize(prompt = "")
-    @prompt = prompt
-    @prompt_margin = 3 + @prompt.length
+  def initialize
     @cursor = {x: 0, y: 0}
     clear
   end
+
   attr_reader :lines
-  def cursor
-    # Human readable
-    {x: @cursor[:x] + 1, y: @cursor[:y] + 1}
-  end
+  attr_reader :cursor
+
   def clear
     @lines = [""]
     home
   end
+
   def dump
     @lines.map do |line|
       line[-1] == "\\" ? line[0, line.length - 1] : line
     end.join("\n")
   end
+
   def home
     @cursor[:x] = 0
     @cursor[:y] = 0
   end
+
   def head
     @cursor[:x] = 0
   end
+
   def tail
     @cursor[:x] = @lines[@cursor[:y]].length
   end
+
   def left
     if @cursor[:x] > 0
       @cursor[:x] -= 1
@@ -65,6 +67,7 @@ class Buffer
       end
     end
   end
+
   def right
     if @lines[@cursor[:y]].length > @cursor[:x]
       @cursor[:x] += 1
@@ -75,6 +78,7 @@ class Buffer
       end
     end
   end
+
   def up
     if @cursor[:y] > 0
       @cursor[:y] -= 1
@@ -84,6 +88,7 @@ class Buffer
       @cursor[:x] = @lines[@cursor[:y]].length
     end
   end
+
   def down
     if @lines.length > @cursor[:y] + 1
       @cursor[:y] += 1
@@ -93,6 +98,7 @@ class Buffer
       end
     end
   end
+
   def put(c)
     line = @lines[@cursor[:y]]
     if c.is_a?(String)
@@ -136,43 +142,9 @@ class Buffer
       end
     end
   end
+
   def current_tail(n = 1)
     @lines[@cursor[:y]][@cursor[:x] - n, 65535].to_s
-  end
-
-  ####################################
-  # Screen
-
-  def adjust_screen
-    print "\e[#{@lines.length - @cursor[:y]}E\e[0J"
-  end
-
-  def refresh_screen
-    if @prev_c == :UP
-      print "\e[1A"
-      @prev_c = nil
-    elsif @prev_c == :DOWN
-      print "\e[1B"
-      @prev_c = nil
-    end
-    if 0 < @cursor[:y]
-      print "\e[#{@cursor[:y]}F"
-    else
-      print "\e[1G"
-    end
-    print "\e[0J"
-    @lines.each_with_index do |line, i|
-      print @prompt
-      if i == 0
-        print "> "
-      else
-        print "* "
-      end
-      puts line
-    end
-    print "\e[#{@lines.length}F"
-    print "\e[#{@cursor[:y]}E" if @cursor[:y] > 0
-    print "\e[#{@cursor[:x] + @prompt_margin}G"
   end
 
 end
