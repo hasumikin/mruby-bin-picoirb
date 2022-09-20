@@ -30,7 +30,7 @@ class Buffer
     clear
   end
 
-  attr_reader :lines
+  attr_accessor :lines
   attr_reader :cursor
 
   def clear
@@ -55,6 +55,10 @@ class Buffer
 
   def tail
     @cursor[:x] = @lines[@cursor[:y]].length
+  end
+
+  def bottom
+    @cursor[:y] = @lines.count - 1
   end
 
   def left

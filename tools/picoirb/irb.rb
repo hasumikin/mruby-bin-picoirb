@@ -50,10 +50,11 @@ when "mruby/c"
 end
 
 TIMEOUT = 10_000 # 10 sec
-PROMPT = "picoirb"
 
-terminal = Terminal.new(:line)
-terminal.prompt = PROMPT
+terminal = Terminal::Line.new
+terminal.debug_tty = ARGV[0]
+terminal.feed = :lf
+terminal.prompt = "picoirb"
 
 sandbox = Sandbox.new
 sandbox.compile("nil") # _ = nil
@@ -72,9 +73,9 @@ terminal.start do |buffer, c|
       if buffer.lines[-1][-1] == "\\"
         buffer.put :ENTER
       else
-        terminal.adjust_screen
-        buffer.clear
+        terminal.feed_at_bottom
         if sandbox.compile(script)
+          terminal.save_history
           if sandbox.resume
             n = 0
             while sandbox.state != 0 do # 0: TASKSTATE_DORMANT == finished(?)
@@ -84,10 +85,10 @@ terminal.start do |buffer, c|
                 puts "Error: Timeout (sandbox.state: #{sandbox.state})"
               end
             end
-            print "=> "
-            p sandbox.result
+            print "=> #{sandbox.result.inspect}#{terminal.feed}"
           end
         end
+        buffer.clear
       end
     end
   else
@@ -99,38 +100,3 @@ puts "\nbye"
 sandbox.exit
 terminate_irb
 
-#while true
-#  terminal.refresh_screen
-#  c = getch
-#  case c
-#  when 3 # Ctrl-C
-#    terminal.clear
-#    terminal.adjust_screen
-#  when 4 # Ctrl-D
-#    exit_irb(sandbox)
-#    break
-#  when 9
-#    terminal.put :TAB
-#  when 10, 13
-#  when 27 # ESC
-#    case gets_nonblock(10)
-#    when "[A"
-#      terminal.put :UP
-#    when "[B"
-#      terminal.put :DOWN
-#    when "[C"
-#      terminal.put :RIGHT
-#    when "[D"
-#      terminal.put :LEFT
-#    else
-#      break
-#    end
-#  when 8, 127 # 127 on UNIX
-#    terminal.put :BSPACE
-#  when 32..126
-#    terminal.put c.chr
-#  else
-#    # ignore
-#  end
-#  debug terminal.cursor
-#end
