@@ -17,21 +17,22 @@ when "ruby"
 
     def compile(script)
       begin
-        RubyVM::InstructionSequence.compile(script)
+        RubyVM::InstructionSequence.compile("_ = (#{script})")
+        @script = script
       rescue SyntaxError => e
-        puts e.message
-        return false
-      end
-      begin
-        @result = eval "_ = (#{script})", @binding
-      rescue => e
-        puts e.message
+        #puts e.message
         return false
       end
       true
     end
 
     def resume
+      begin
+        @result = eval "_ = (#{@script})", @binding
+      rescue => e
+        puts e.message
+        return false
+      end
       true
     end
 
@@ -52,7 +53,9 @@ end
 TIMEOUT = 10_000 # 10 sec
 
 terminal = Terminal::Line.new
-terminal.debug_tty = ARGV[0]
+if RUBY_ENGINE == "ruby"
+  terminal.debug_tty = ARGV[0]
+end
 terminal.feed = :lf
 terminal.prompt = "picoirb"
 
@@ -70,25 +73,24 @@ terminal.start do |buffer, c|
     when "quit", "exit"
       break
     else
-      if buffer.lines[-1][-1] == "\\"
+      if buffer.lines[-1][-1] == "\\" || !sandbox.compile(script)
         buffer.put :ENTER
       else
         terminal.feed_at_bottom
-        if sandbox.compile(script)
+        if sandbox.resume
           terminal.save_history
-          if sandbox.resume
-            n = 0
-            while sandbox.state != 0 do # 0: TASKSTATE_DORMANT == finished(?)
-              sleep_ms 50
-              n += 50
-              if n > TIMEOUT
-                puts "Error: Timeout (sandbox.state: #{sandbox.state})"
-              end
+          n = 0
+          while sandbox.state != 0 do # 0: TASKSTATE_DORMANT == finished(?)
+            sleep_ms 50
+            n += 50
+            if n > TIMEOUT
+              puts "Error: Timeout (sandbox.state: #{sandbox.state})"
             end
-            print "=> #{sandbox.result.inspect}#{terminal.feed}"
           end
+          print "=> #{sandbox.result.inspect}#{terminal.feed}"
         end
         buffer.clear
+        terminal.history_head
       end
     end
   else

@@ -12,7 +12,7 @@ class Terminal
       def gets_nonblock(max)
         STDIN.noecho{ |input| input.read_nonblock(max) }
       end
-      def get_position_report
+      def get_cursor_position
         res = ""
         STDIN.raw do |stdin|
           STDOUT << "\e[6n"
@@ -30,8 +30,6 @@ class Terminal
     # mode: :fullscreen | :line
     def initialize
       self.feed = :crlf
-      @row_size = 0
-      @col_size = 0
       get_size
       @buffer = Buffer.new
       prompt = ""
@@ -59,10 +57,11 @@ class Terminal
     end
 
     def get_size
-      y, x = get_position_report # save current position
+      y, x = get_cursor_position # save current position
       home
       print "\e[999B\e[999C" # down * 999 and right * 999
-      @row_size, @col_size = get_position_report
+      @row_size, @col_size = get_cursor_position
+      debug "#{@row_size};#{@col_size}" # restore original position
       print "\e[#{y};#{x}H" # restore original position
     end
 
@@ -75,8 +74,8 @@ class Terminal
     end
 
     def debug(text)
-      if @debug_tty
-        `echo "#{text}" > /dev/pts/#{@debug_tty}`
+      if @debug_tty && RUBY_ENGINE == 'ruby'
+        system "echo '#{text}' > /dev/pts/#{@debug_tty}"
       end
     end
 
@@ -91,6 +90,10 @@ class Terminal
 
     MAX_HISTORY_COUNT = 10
 
+    def history_head
+      @history_index = @history.count
+    end
+
     def save_history
       if @history[-1] != @buffer.lines
         @history << @buffer.lines
@@ -98,7 +101,7 @@ class Terminal
       if MAX_HISTORY_COUNT < @history.count
         @history.shift
       end
-      @history_index = @history.count
+      history_head
     end
 
     def load_history(dir)
@@ -130,18 +133,21 @@ class Terminal
 
       line_count = physical_line_count
 
+      # Move cursor to the top of the snippet
       if 0 < @prev_cursor_y
         print "\e[#{@prev_cursor_y}F"
       else
         print "\e[1G"
       end
-      print "\e[0J"
+      print "\e[0J" # Delete all after the cursor
 
-      scroll = line_count - (@row_size - get_position_report[0]) - 1
+      # Scroll screen if necessary
+      scroll = line_count - (@row_size - get_cursor_position[0]) - 1
       if 0 < scroll
         print "\e[#{scroll}S\e[#{scroll}A"
       end
 
+      # Show the buffer
       @buffer.lines.each_with_index do |line, i|
         print @prompt
         if i == 0
@@ -151,24 +157,27 @@ class Terminal
         end
         print line
         if (@prompt_margin + line.length) % @col_size == 0
+          # if the last letter is on the right most of the window,
+          # move cursor to the next line's head
           print "\e[1E"
         end
         print @feed if @buffer.lines[i + 1]
       end
 
+      # move the cursor where supposed to be
       print "\e[#{line_count}F"
       @prev_cursor_y = -1
       @buffer.lines.each_with_index do |line, i|
         break if i == @buffer.cursor[:y]
-        c = (@prompt_margin + line.length) / @col_size + 1
-        print "\e[#{c}B"
-        @prev_cursor_y += c
+        a = (@prompt_margin + line.length) / @col_size + 1
+        print "\e[#{a}B"
+        @prev_cursor_y += a
       end
-      a = (@prompt_margin + @buffer.cursor[:x]) / @col_size + 1
-      print "\e[#{a}B" if 0 < a
-      @prev_cursor_y += a
-      b = (@prompt_margin + @buffer.cursor[:x]) % @col_size
-      print "\e[#{b}C" if 0 < b
+      b = (@prompt_margin + @buffer.cursor[:x]) / @col_size + 1
+      print "\e[#{b}B"
+      @prev_cursor_y += b
+      c = (@prompt_margin + @buffer.cursor[:x]) % @col_size
+      print "\e[#{c}C" if 0 < c
     end
 
     def start
@@ -179,11 +188,15 @@ class Terminal
         when 1 # Ctrl-A
           @buffer.head
         when 3 # Ctrl-C
-          print @feed, "SIGINT"
-          break
-        when 4 # Ctrl-D
-          print @feed, "logout"
-          break
+          @buffer.bottom
+          @buffer.tail
+          print @feed, "^C\e[0J", @feed
+          @prev_cursor_y = 0
+          @buffer.clear
+          history_head
+        when 4 # Ctrl-D logout
+          print @feed
+          return
         when 5 # Ctrl-E
           @buffer.tail
         when 9
@@ -247,7 +260,7 @@ class Terminal
         print " " * (@col_size - 2)
         print "#"
       end
-      print "Ctrl+D to quit / Ctrl+L to refresh screen #".rjust(@col_size)
+      print "Ctrl+D to quit | Ctrl+L to refresh screen #".rjust(@col_size)
     end
 
   end

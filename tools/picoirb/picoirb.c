@@ -2,7 +2,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <termios.h>
+#include <termio.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <mrubyc.h>
@@ -17,6 +17,7 @@
 
 /* Ruby */
 #include "buffer.c"
+#include "terminal.c"
 #include "irb.c"
 
 #include "sandbox.h"
@@ -24,6 +25,54 @@
 int sigint;
 int loglevel;
 static uint8_t heap[HEAP_SIZE];
+
+void
+c_get_cursor_position(mrb_vm *vm, mrb_value *v, int argc)
+{
+  static struct termios state, oldstate;
+  char buf[10];
+  char *p1 = buf;
+  char *p2 = NULL;
+  char c;
+  int row = 0;
+  int col = 0;
+
+  // echo off
+  tcgetattr(0, &oldstate);
+  state = oldstate;
+  state.c_lflag &= ~(ICANON | ECHO);
+  tcsetattr(0, TCSANOW, &state);
+
+  // report cursor position
+  write(0,"\e[6n",4);
+
+  for (;;) {
+    read(0, &c, 1);
+    if(0x30 <= c && c <= 0x39) *p1++ = c;
+    if(c == ';') {
+      *p1++ = '\0';
+      row = atoi(buf);
+      p2 = p1;
+    }
+    if(c == 'R') break;
+  }
+  *p1 = '\0';
+  col = atoi(p2);
+
+  // echo on
+  tcsetattr(0, TCSANOW, &oldstate);
+
+  mrbc_value return_val = mrbc_array_new(vm, 2);
+  mrbc_array *rb_array = return_val.array;
+  rb_array->n_stored = 2;
+  if (row && col) {
+    mrbc_set_integer(rb_array->data, row);
+    mrbc_set_integer(rb_array->data + 1, col);
+  } else {
+    mrbc_raise(vm, MRBC_CLASS(Exception), "get_cursor_position failed");
+  }
+  SET_RETURN(return_val);
+}
 
 void
 c_getch(mrb_vm *vm, mrb_value *v, int argc)
@@ -119,14 +168,16 @@ c_terminate_irb(mrb_vm *vm, mrb_value *v, int argc)
 int
 main(int argc, char *argv[])
 {
-  loglevel = LOGLEVEL_ERROR;
+  loglevel = LOGLEVEL_FATAL;
   mrbc_init(heap, HEAP_SIZE);
+  mrbc_define_method(0, mrbc_class_object, "get_cursor_position", c_get_cursor_position);
   mrbc_define_method(0, mrbc_class_object, "getch", c_getch);
   mrbc_define_method(0, mrbc_class_object, "gets_nonblock", c_gets_nonblock);
   mrbc_define_method(0, mrbc_class_object, "terminate_irb", c_terminate_irb);
   SANDBOX_INIT();
   create_sandbox();
   mrbc_create_task(buffer, 0);
+  mrbc_create_task(terminal, 0);
   mrbc_create_task(irb, 0);
   ignore_sigint();
   mrbc_run();

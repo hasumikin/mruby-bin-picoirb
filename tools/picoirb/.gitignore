@@ -1,3 +1,4 @@
 irb.c
 buffer.c
+terminal.c
 sandbox_task.c
