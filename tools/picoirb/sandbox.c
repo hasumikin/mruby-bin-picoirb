@@ -50,7 +50,9 @@ c_sandbox_compile(mrb_vm *vm, mrb_value *v, int argc)
   StreamInterface *si = StreamInterface_new(NULL, script, STREAM_TYPE_MEMORY);
   if (!Compiler_compile(p, si, cxt)) {
     SET_FALSE_RETURN();
-    p->scope->lvar = NULL; /* lvar (== cxt->sysm) should not be freed */
+    Scope *upper_scope = p->scope;
+    while (upper_scope->upper) upper_scope = upper_scope->upper;
+    upper_scope->lvar = NULL; /* top level lvar (== cxt->sysm) should not be freed */
     Compiler_parserStateFree(p);
   } else {
     SET_TRUE_RETURN();
