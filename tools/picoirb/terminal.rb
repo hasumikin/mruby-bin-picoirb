@@ -1,6 +1,8 @@
 # Learn "Terminal modes"
 # https://www.ibm.com/docs/en/linux-on-systems?topic=wysk-terminal-modes
-#
+
+require_relative "./buffer.rb"
+
 class Terminal
 
   class Base
@@ -232,7 +234,7 @@ class Terminal
         when 32..126
           @buffer.put c.chr
         else
-          yield @buffer, c
+          yield self, @buffer, c
         end
       end
     end

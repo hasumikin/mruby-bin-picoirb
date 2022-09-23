@@ -4,7 +4,7 @@ case RUBY_ENGINE
 when "ruby"
   require "io/console"
   require_relative "./terminal.rb"
-  require_relative "./buffer.rb"
+  require_relative "./command.rb"
 
   class Sandbox
     def initialize
@@ -35,9 +35,6 @@ when "ruby"
       end
       true
     end
-
-    def exit
-    end
   end
 
   def terminate_irb
@@ -50,55 +47,98 @@ when "mruby/c"
   end
 end
 
-TIMEOUT = 10_000 # 10 sec
+class Shell
+  TIMEOUT = 10_000 # 10 sec
+  def initialize(default_mode)
+    @default_mode = default_mode
+    @terminal = Terminal::Line.new
+    if RUBY_ENGINE == "ruby"
+      @terminal.debug_tty = ARGV[0]
+    end
+    @terminal.feed = :lf
+    @sandbox = Sandbox.new
+    @sandbox.compile("nil") # _ = nil
+    @sandbox.resume
+  end
 
-terminal = Terminal::Line.new
-if RUBY_ENGINE == "ruby"
-  terminal.debug_tty = ARGV[0]
-end
-terminal.feed = :lf
-terminal.prompt = "picoirb"
+  def deinitialize
+    puts "\nbye"
+    terminate_irb
+  end
 
-sandbox = Sandbox.new
-sandbox.compile("nil") # _ = nil
-sandbox.resume
+  def start
+    case @default_mode
+    when :ruby
+      @terminal.prompt = "ruby"
+      run_ruby
+    when :mrbsh
+      @terminal.prompt = "sh"
+      run_mrbsh
+    end
+    deinitialize
+  end
 
-terminal.start do |buffer, c|
-  case c
-  when 10, 13
-    script = buffer.dump.chomp
-    case script
-    when ""
-      puts
-    when "quit", "exit"
-      break
-    else
-      if buffer.lines[-1][-1] == "\\" || !sandbox.compile(script)
-        buffer.put :ENTER
-      else
-        terminal.feed_at_bottom
-        if sandbox.resume
+  def run_mrbsh
+    sandbox = @sandbox
+    command = Command.new
+    command.feed = @terminal.feed
+    @terminal.start do |terminal, buffer, c|
+      case c
+      when 10, 13 # TODO depenging on the the "terminal"
+        case args = buffer.dump.chomp.strip.split(" ")
+        when []
+          puts
+        when ["quit"], ["exit"]
+          break
+        else
+          print terminal.feed
+          command.exec *args
           terminal.save_history
-          n = 0
-          while sandbox.state != 0 do # 0: TASKSTATE_DORMANT == finished(?)
-            sleep_ms 50
-            n += 50
-            if n > TIMEOUT
-              puts "Error: Timeout (sandbox.state: #{sandbox.state})"
-            end
-          end
-          print "=> #{sandbox.result.inspect}#{terminal.feed}"
+          buffer.clear
         end
-        buffer.clear
-        terminal.history_head
       end
     end
-  else
-    terminal.debug c
+  end
+
+  def run_ruby
+    sandbox = @sandbox
+    @terminal.start do |terminal, buffer, c|
+      case c
+      when 10, 13 # TODO depenging on the the "terminal"
+        case script = buffer.dump.chomp
+        when ""
+          puts
+        when "quit", "exit"
+          break
+        else
+          if buffer.lines[-1][-1] == "\\" || !sandbox.compile(script)
+            buffer.put :ENTER
+          else
+            terminal.feed_at_bottom
+            if sandbox.resume
+              terminal.save_history
+              n = 0
+              # state 0: TASKSTATE_DORMANT == finished
+              while sandbox.state != 0 do
+                sleep_ms 50
+                n += 50
+                if n > TIMEOUT
+                  puts "Error: Timeout (sandbox.state: #{sandbox.state})"
+                end
+              end
+              print "=> #{sandbox.result.inspect}#{terminal.feed}"
+            end
+            buffer.clear
+            terminal.history_head
+          end
+        end
+      else
+        terminal.debug c
+      end
+    end
   end
 end
 
-puts "\nbye"
-sandbox.exit
-terminate_irb
-
+#shell = Shell.new(:ruby)
+shell = Shell.new(:mrbsh)
+shell.start
