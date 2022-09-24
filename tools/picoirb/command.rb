@@ -1,3 +1,5 @@
+require_relative "./shell.rb"
+
 class Command
   def initialize
   end
@@ -5,6 +7,8 @@ class Command
   attr_accessor :feed
 
   BUILTIN = %w(
+    irb
+    ruby
     alias
     cd
     echo
@@ -37,10 +41,14 @@ class Command
   def exec(*params)
     args = params[1, params.length - 1]
     case params[0]
+    when "irb"
+      _irb
     when "echo"
       _echo *args
     when "type"
       _type *args
+    else
+      print "#{params[0]}: command not found"
     end
     print @feed
   end
@@ -48,6 +56,10 @@ class Command
   #
   # Builtin commands
   #
+
+  def _irb
+    Shell.new.start(:irb)
+  end
 
   def _type(*params)
     params.each_with_index do |name, index|

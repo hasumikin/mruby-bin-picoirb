@@ -2,3 +2,5 @@ irb.c
 buffer.c
 terminal.c
 sandbox_task.c
+command.c
+shell.c

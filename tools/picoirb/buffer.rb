@@ -33,6 +33,10 @@ class Buffer
   attr_accessor :lines
   attr_reader :cursor
 
+  def current_line
+    @lines[@cursor[:y]]
+  end
+
   def clear
     @lines = [""]
     home
@@ -54,7 +58,7 @@ class Buffer
   end
 
   def tail
-    @cursor[:x] = @lines[@cursor[:y]].length
+    @cursor[:x] = current_line.length
   end
 
   def bottom
@@ -62,21 +66,20 @@ class Buffer
   end
 
   def left
-    if @cursor[:x] > 0
+    if 0 < @cursor[:x] && 0 < current_line.length
+      tail if current_line.length < @cursor[:x]
       @cursor[:x] -= 1
-    else
-      if @cursor[:y] > 0
-        up
-        tail
-      end
+    elsif 0 < @cursor[:y]
+      up
+      tail
     end
   end
 
   def right
-    if @lines[@cursor[:y]].length > @cursor[:x]
+    if @cursor[:x] < current_line.length
       @cursor[:x] += 1
     else
-      if @lines.length > @cursor[:y] + 1
+      if @cursor[:y] + 1 < @lines.length
         down
         head
       end
@@ -84,27 +87,21 @@ class Buffer
   end
 
   def up
-    if @cursor[:y] > 0
+    if 0 < @cursor[:y]
       @cursor[:y] -= 1
       @prev_c = :UP
-    end
-    if @cursor[:x] > @lines[@cursor[:y]].length
-      @cursor[:x] = @lines[@cursor[:y]].length
     end
   end
 
   def down
-    if @lines.length > @cursor[:y] + 1
+    if @cursor[:y] + 1 < @lines.length
       @cursor[:y] += 1
       @prev_c = :DOWN
-      if @cursor[:x] > @lines[@cursor[:y]].length
-        @cursor[:x] = @lines[@cursor[:y]].length
-      end
     end
   end
 
   def put(c)
-    line = @lines[@cursor[:y]]
+    line = current_line
     if c.is_a?(String)
       line = line[0, @cursor[:x]].to_s + c + line[@cursor[:x], 65535].to_s
       @lines[@cursor[:y]] = line
@@ -121,14 +118,14 @@ class Buffer
         head
         down
       when :BSPACE
-        if @cursor[:x] > 0
+        if 0 < @cursor[:x]
           line = line[0, @cursor[:x] - 1].to_s + line[@cursor[:x], 65535].to_s
           @lines[@cursor[:y]] = line
           left
         else
-          if @cursor[:y] > 0
+          if 0 < @cursor[:y]
             @cursor[:x] = @lines[@cursor[:y] - 1].length
-            @lines[@cursor[:y] - 1] += @lines[@cursor[:y]]
+            @lines[@cursor[:y] - 1] += current_line
             @lines.delete_at @cursor[:y]
             up
           end
@@ -148,7 +145,7 @@ class Buffer
   end
 
   def current_tail(n = 1)
-    @lines[@cursor[:y]][@cursor[:x] - n, 65535].to_s
+    current_line[@cursor[:x] - n, 65535].to_s
   end
 
 end

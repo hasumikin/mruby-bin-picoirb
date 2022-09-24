@@ -1,53 +1,47 @@
 # Learn "Terminal modes"
 # https://www.ibm.com/docs/en/linux-on-systems?topic=wysk-terminal-modes
 
-require_relative "./buffer.rb"
+if RUBY_ENGINE == "ruby"
+  require "io/console"
+  require_relative "./buffer.rb"
+
+  def getch
+    STDIN.getch.ord
+  end
+  def gets_nonblock(max)
+    STDIN.noecho{ |input| input.read_nonblock(max) }
+  rescue IO::EAGAINWaitReadable => e
+    nil
+  end
+  def get_cursor_position
+    res = ""
+    STDIN.raw do |stdin|
+      STDOUT << "\e[6n"
+      STDOUT.flush
+      while (c = stdin.getc) != 'R'
+        res << c if c
+      end
+    end
+    STDIN.iflush
+    _size = res.split(";")
+    return [_size[0][2, 3].to_i, _size[1].to_i]
+  end
+end
 
 class Terminal
 
   class Base
-    case RUBY_ENGINE
-    when "ruby"
-      def getch
-        STDIN.getch.ord
-      end
-      def gets_nonblock(max)
-        STDIN.noecho{ |input| input.read_nonblock(max) }
-      end
-      def get_cursor_position
-        res = ""
-        STDIN.raw do |stdin|
-          STDOUT << "\e[6n"
-          STDOUT.flush
-          while (c = stdin.getc) != 'R'
-            res << c if c
-          end
-        end
-        STDIN.iflush
-        _size = res.split(";")
-        return [_size[0][2, 3].to_i, _size[1].to_i]
-      end
-    end
-
-    # mode: :fullscreen | :line
     def initialize
       self.feed = :crlf
       get_size
       @buffer = Buffer.new
-      prompt = ""
-      @prev_cursor_y = 0
     end
 
-    attr_reader :feed
+    attr_reader :feed, :col_size, :row_size
     attr_accessor :debug_tty
 
     def feed=(arg)
       @feed = arg == :lf ? "\n" : "\r\n"
-    end
-
-    def prompt=(word)
-      @prompt = word
-      @prompt_margin = 2 + @prompt.length
     end
 
     def clear
@@ -56,6 +50,10 @@ class Terminal
 
     def home
       print "\e[1;1H"
+    end
+
+    def next_head
+      print "\e[1E"
     end
 
     def get_size
@@ -85,20 +83,28 @@ class Terminal
 
   class Line < Base
     def initialize
-      @history = Array.new
-      @history_index = 0
       super
+      @history = [[""]]
+      @history_index = 0
+      @prev_cursor_y = 0
+      self.prompt = "$"
     end
 
     MAX_HISTORY_COUNT = 10
 
+    def prompt=(word)
+      @prompt = word
+      @prompt_margin = 2 + @prompt.length
+    end
+
     def history_head
-      @history_index = @history.count
+      @history_index = @history.count - 1
     end
 
     def save_history
-      if @history[-1] != @buffer.lines
-        @history << @buffer.lines
+      if @history[-2] != @buffer.lines
+        @history[@history.size - 1] = @buffer.lines
+        @history << [""]
       end
       if MAX_HISTORY_COUNT < @history.count
         @history.shift
@@ -110,7 +116,7 @@ class Terminal
       if dir == :up
         return if @history_index == 0
         @history_index -= 1
-      else
+      else # :down
         return if @history_index == @history.count - 1
         @history_index += 1
       end
@@ -185,8 +191,7 @@ class Terminal
     def start
       while true
         refresh
-        c = getch
-        case c
+        case c = getch
         when 1 # Ctrl-A
           @buffer.head
         when 3 # Ctrl-C
@@ -241,30 +246,71 @@ class Terminal
 
   end
 
-  class FullScreen < Base
-    MIN_ROWS = 24
-    MIN_COLS = 80
-
-    def draw_frame
-      clear
-      home
-      if @col_size < MIN_COLS || @row_size < MIN_ROWS
-        print "Terminal should be larger than col:#{MIN_COLS} * row:#{MIN_ROWS}#{@feed}"
-        print "(Now it's col:#{@col_size} * row:#{@row_size})#{@feed}"
-        print "Resize screen then press Ctrl+L to refresh#{@feed}"
-        return
-      end
-      print "#" * @col_size
-      home
-      print "\e[B"
-      (@row_size - 2).times do |row|
-        print "#"
-        print " " * (@col_size - 2)
-        print "#"
-      end
-      print "Ctrl+D to quit | Ctrl+L to refresh screen #".rjust(@col_size)
+  class Editor < Base
+    def initialize
+      @header_size = 0
+      @footer_size = 0
+      super
     end
 
+    attr_accessor :header_size, :footer_size
+
+    def load_file_into_buffer(filepath)
+      if File.exist?(filepath)
+        @buffer.lines.clear
+        File.open(filepath, 'r') do |f|
+          f.each_line do |line|
+            @buffer.lines << line.chomp
+          end
+        end
+        return true
+      else
+        return false
+      end
+    end
+
+    def refresh
+      clear
+      home
+      contents_size = @row_size - @header_size - @footer_size
+      row = 0
+      while true
+        if @buffer.lines[row]
+          print (row + 1).to_s.rjust(3), " "
+          print @buffer.lines[row]
+          row += 1
+          break if row == contents_size
+          next_head
+        else
+          break
+        end
+      end
+      print "\e[#{@header_size + contents_size + 1};1H"
+      @footer_proc&.call(self)
+    end
+
+    def refresh_footer(&block)
+      @footer_proc = block
+    end
+
+    def refresh_cursor
+      x = [@buffer.cursor[:x], @buffer.current_line.length].min + 5
+      print "\e[#{@buffer.cursor[:y] + 1};#{x}H"
+    end
+
+    def start
+      while true
+        refresh
+        case c = getch
+        when 3 # Ctrl-C
+          return
+        when 4 # Ctrl-D logout
+          return
+        else
+          yield self, @buffer, c
+        end
+      end
+    end
   end
 end
 
