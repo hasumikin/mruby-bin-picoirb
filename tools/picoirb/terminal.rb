@@ -37,7 +37,7 @@ class Terminal
       @buffer = Buffer.new
     end
 
-    attr_reader :feed, :col_size, :row_size
+    attr_reader :feed, :width, :height
     attr_accessor :debug_tty
 
     def feed=(arg)
@@ -60,15 +60,15 @@ class Terminal
       y, x = get_cursor_position # save current position
       home
       print "\e[999B\e[999C" # down * 999 and right * 999
-      @row_size, @col_size = get_cursor_position
-      debug "#{@row_size};#{@col_size}" # restore original position
+      @height, @width = get_cursor_position
+      debug "#{@height};#{@width}" # restore original position
       print "\e[#{y};#{x}H" # restore original position
     end
 
     def physical_line_count
       count = 0
       @buffer.lines.each do |line|
-        count += 1 + (@prompt_margin + line.length) / @col_size
+        count += 1 + (@prompt_margin + line.length) / @width
       end
       count
     end
@@ -150,7 +150,7 @@ class Terminal
       print "\e[0J" # Delete all after the cursor
 
       # Scroll screen if necessary
-      scroll = line_count - (@row_size - get_cursor_position[0]) - 1
+      scroll = line_count - (@height - get_cursor_position[0]) - 1
       if 0 < scroll
         print "\e[#{scroll}S\e[#{scroll}A"
       end
@@ -164,7 +164,7 @@ class Terminal
           print "* "
         end
         print line
-        if (@prompt_margin + line.length) % @col_size == 0
+        if (@prompt_margin + line.length) % @width == 0
           # if the last letter is on the right most of the window,
           # move cursor to the next line's head
           print "\e[1E"
@@ -177,14 +177,14 @@ class Terminal
       @prev_cursor_y = -1
       @buffer.lines.each_with_index do |line, i|
         break if i == @buffer.cursor[:y]
-        a = (@prompt_margin + line.length) / @col_size + 1
+        a = (@prompt_margin + line.length) / @width + 1
         print "\e[#{a}B"
         @prev_cursor_y += a
       end
-      b = (@prompt_margin + @buffer.cursor[:x]) / @col_size + 1
+      b = (@prompt_margin + @buffer.cursor[:x]) / @width + 1
       print "\e[#{b}B"
       @prev_cursor_y += b
-      c = (@prompt_margin + @buffer.cursor[:x]) % @col_size
+      c = (@prompt_margin + @buffer.cursor[:x]) % @width
       print "\e[#{c}C" if 0 < c
     end
 
@@ -248,12 +248,12 @@ class Terminal
 
   class Editor < Base
     def initialize
-      @header_size = 0
-      @footer_size = 0
+      @header_height = 0
+      @footer_height = 0
       super
     end
 
-    attr_accessor :header_size, :footer_size
+    attr_accessor :header_height, :footer_height
 
     def load_file_into_buffer(filepath)
       if File.exist?(filepath)
@@ -272,20 +272,20 @@ class Terminal
     def refresh
       clear
       home
-      contents_size = @row_size - @header_size - @footer_size
+      content_height = @height - @header_height - @footer_height
       row = 0
       while true
         if @buffer.lines[row]
           print (row + 1).to_s.rjust(3), " "
           print @buffer.lines[row]
           row += 1
-          break if row == contents_size
+          break if row == content_height
           next_head
         else
           break
         end
       end
-      print "\e[#{@header_size + contents_size + 1};1H"
+      print "\e[#{@header_height + content_height + 1};1H"
       @footer_proc&.call(self)
     end
 
