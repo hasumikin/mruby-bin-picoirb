@@ -119,9 +119,13 @@ class Buffer
         down
       when :BSPACE
         if 0 < @cursor[:x]
-          line = line[0, @cursor[:x] - 1].to_s + line[@cursor[:x], 65535].to_s
-          @lines[@cursor[:y]] = line
-          left
+          if current_line.length == @cursor[:x]
+            @lines[@cursor[:y]][-1] = ""
+            tail
+          else
+            @lines[@cursor[:y]][@cursor[:x] - 1] = ""
+            left
+          end
         else
           if 0 < @cursor[:y]
             @cursor[:x] = @lines[@cursor[:y] - 1].length
