@@ -61,7 +61,7 @@ class Terminal
       home
       print "\e[999B\e[999C" # down * 999 and right * 999
       @height, @width = get_cursor_position
-      debug "#{@height};#{@width}" # restore original position
+      # debug "#{@height};#{@width}" # restore original position
       print "\e[#{y};#{x}H" # restore original position
     end
 
@@ -248,12 +248,16 @@ class Terminal
 
   class Editor < Base
     def initialize
-      @header_height = 0
+      @content_margin_height = 5
       @footer_height = 0
+      @visual_offset = 0
+      @visual_cursor_x = 0
+      @visual_cursor_y = 0
       super
+@debug_tty = "11"
     end
 
-    attr_accessor :header_height, :footer_height
+    attr_accessor :footer_height
 
     def load_file_into_buffer(filepath)
       if File.exist?(filepath)
@@ -270,32 +274,94 @@ class Terminal
     end
 
     def refresh
+      content_height = @height - @footer_height
+      content_width = @width - 4
+      calculate_visual_cursor
+      if (offset = content_height - @content_margin_height - @visual_cursor_y - 1) < 0
+        @visual_offset += offset
+      end
+      calculate_visual_cursor
+      visual_offset = @visual_offset
       clear
       home
-      content_height = @height - @header_height - @footer_height
-      row = 0
-      while true
-        if @buffer.lines[row]
-          print (row + 1).to_s.rjust(3), " "
-          print @buffer.lines[row]
-          row += 1
-          break if row == content_height
-          next_head
-        else
-          break
+      first_lineno = nil
+      first_line_skip_count = 0
+      @buffer.lines.each_with_index do |line, lineno|
+        [1, ((line.length + content_width - 1) / content_width)].max.times do |i|
+          if visual_offset < 0
+            visual_offset += 1
+          else
+            unless first_lineno
+              first_lineno = lineno
+              first_line_skip_count = i
+            end
+            if 0 < i
+              print "    "
+            else
+              print "#{lineno + 1} ".rjust(4)
+            end
+            print line[i * content_width, content_width]
+            content_height -= 1
+            break if content_height == 0
+            next_head
+          end
+        end
+        break if content_height == 0
+      end
+      debug "l:#{first_lineno} s:#{first_line_skip_count} scroll:#{content_height}"
+      # Adjust if cursor is close to the end of file
+      if 0 < content_height && @visual_offset < 0
+        print "\e[#{content_height}T" # Scroll up
+        @visual_offset += content_height
+        # Fill the blank made by the scroll
+        blank_lines = []
+        ((first_line_skip_count - content_height)..first_lineno).each do |lineno|
+          line = @buffer.lines[lineno]
+          [1, (line.length - 1) / content_width + 1].max.times do |i|
+            break if lineno == first_lineno && first_line_skip_count - 1 < i
+            str = if i == 0
+              "\e[31m#{lineno + 1} ".rjust(4)
+            else
+              "\e[31m    "
+            end
+            str << line[i * content_width, content_width]
+            str << "\e[0m"
+            blank_lines.unshift str
+          end
+        end
+        blank_lines.each do |line|
+          print "\e[#{content_height};1H#{line}"
+          content_height -= 1
+          break if content_height < 1
         end
       end
-      print "\e[#{@header_height + content_height + 1};1H"
+      print "\e[#{@height - @footer_height + 1};1H"
       @footer_proc&.call(self)
+      @cursor_proc&.call(self)
+    end
+
+    def refresh_cursor(&block)
+      @cursor_proc = block
     end
 
     def refresh_footer(&block)
       @footer_proc = block
     end
 
-    def refresh_cursor
-      x = [@buffer.cursor[:x], @buffer.current_line.length].min + 5
-      print "\e[#{@buffer.cursor[:y] + 1};#{x}H"
+    def show_cursor
+      print "\e[#{@visual_cursor_y + 1};#{@visual_cursor_x + 5}H"
+    end
+
+    def calculate_visual_cursor
+      content_width = @width - 4
+      y = 0
+      @buffer.lines.each_with_index do |line, i|
+        break if i == @buffer.cursor[:y]
+        y += [1, (line.length + content_width - 1) / content_width].max
+      end
+      @visual_cursor_y = y + @buffer.cursor[:x] / content_width + @visual_offset
+      @visual_cursor_x = @buffer.cursor[:x] % content_width
+#debug "v #{@visual_cursor_x}, #{@visual_cursor_y} / l #{@buffer.cursor[:x]}, #{@buffer.cursor[:y]}"
     end
 
     def start

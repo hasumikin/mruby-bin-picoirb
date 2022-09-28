@@ -9,7 +9,6 @@ class Vim
     @filepath = File.expand_path filepath, Dir.getwd
     @mode = :normal
     @terminal = Terminal::Editor.new
-    @terminal.header_height= 0
     @terminal.footer_height = 2
     @command_buffer = Buffer.new
     unless @terminal.load_file_into_buffer(@filepath)
@@ -18,15 +17,19 @@ class Vim
     @terminal.refresh_footer do |terminal|
       #     foreground  background
       print "\e[37;1m" ,"\e[48;5;239m"
-      print " ", @filepath[0, terminal.height - 3].ljust(terminal.width - 1)
+      print " ", @filepath[0, terminal.width - 1].ljust(terminal.width - 1)
       print "\e[m" # reset color
       print "\e[1E"
       print @command_buffer.lines[0]
       if @mode == :command
         print "\e[#{terminal.width};1H"
         print "\e[#{@command_buffer.lines[0].size}C"
-      else
-        terminal.refresh_cursor
+      end
+    end
+    @terminal.refresh_cursor do |terminal|
+      unless @mode == :command
+        terminal.calculate_visual_cursor
+        terminal.show_cursor
       end
     end
   end
