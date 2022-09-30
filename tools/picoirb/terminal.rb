@@ -280,11 +280,12 @@ class Terminal
         # Cursor is upper than margin top
         @visual_offset -= offset
         @visual_offset = 0 if 0 < @visual_offset # Adjustment
+        calculate_visual_cursor
       elsif (offset = content_height - @content_margin_height - @visual_cursor_y - 1) < 0
         # Cursor is lower than margin bottom (Adjustment scroll will run later)
         @visual_offset += offset
+        calculate_visual_cursor
       end
-      calculate_visual_cursor
       visual_offset = @visual_offset
       clear
       home
@@ -365,6 +366,10 @@ class Terminal
       end
       @visual_cursor_y = y + @buffer.cursor[:x] / content_width + @visual_offset
       @visual_cursor_x = @buffer.cursor[:x] % content_width
+      if @visual_cursor_x == 0 && @buffer.current_line.length == @buffer.cursor[:x]
+        @visual_cursor_x = @width
+        @visual_cursor_y -= 1
+      end
     end
 
     def start
@@ -377,7 +382,7 @@ class Terminal
           return
         when 12 # Ctrl-L
           get_size
-          refresh
+          # FIXME: in case that cursor has to relocate
         else
           yield self, @buffer, c
         end
