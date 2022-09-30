@@ -176,15 +176,15 @@ class Terminal
       print "\e[#{line_count}F"
       @prev_cursor_y = -1
       @buffer.lines.each_with_index do |line, i|
-        break if i == @buffer.cursor[:y]
+        break if i == @buffer.cursor_y
         a = (@prompt_margin + line.length) / @width + 1
         print "\e[#{a}B"
         @prev_cursor_y += a
       end
-      b = (@prompt_margin + @buffer.cursor[:x]) / @width + 1
+      b = (@prompt_margin + @buffer.cursor_x) / @width + 1
       print "\e[#{b}B"
       @prev_cursor_y += b
-      c = (@prompt_margin + @buffer.cursor[:x]) % @width
+      c = (@prompt_margin + @buffer.cursor_x) % @width
       print "\e[#{c}C" if 0 < c
     end
 
@@ -360,13 +360,15 @@ class Terminal
     def calculate_visual_cursor
       content_width = @width - 4
       y = 0
+      cursor_x = @buffer.cursor_x
+      cursor_y = @buffer.cursor_y
       @buffer.lines.each_with_index do |line, i|
-        break if i == @buffer.cursor[:y]
+        break if i == cursor_y
         y += [1, (line.length + content_width - 1) / content_width].max
       end
-      @visual_cursor_y = y + @buffer.cursor[:x] / content_width + @visual_offset
-      @visual_cursor_x = @buffer.cursor[:x] % content_width
-      if @visual_cursor_x == 0 && @buffer.current_line.length == @buffer.cursor[:x]
+      @visual_cursor_y = y + cursor_x / content_width + @visual_offset
+      @visual_cursor_x = cursor_x % content_width
+      if @visual_cursor_x == 0 && 0 < cursor_x && @buffer.current_line.length == cursor_x
         @visual_cursor_x = @width
         @visual_cursor_y -= 1
       end

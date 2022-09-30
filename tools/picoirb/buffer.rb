@@ -26,15 +26,16 @@ end
 
 class Buffer
   def initialize
-    @cursor = {x: 0, y: 0}
+    @cursor_x = 0
+    @cursor_y = 0
     clear
   end
 
   attr_accessor :lines
-  attr_reader :cursor
+  attr_reader :cursor_x, :cursor_y
 
   def current_line
-    @lines[@cursor[:y]]
+    @lines[@cursor_y]
   end
 
   def clear
@@ -49,37 +50,37 @@ class Buffer
   end
 
   def home
-    @cursor[:x] = 0
-    @cursor[:y] = 0
+    @cursor_x = 0
+    @cursor_y = 0
   end
 
   def head
-    @cursor[:x] = 0
+    @cursor_x = 0
   end
 
   def tail
-    @cursor[:x] = current_line.length
+    @cursor_x = current_line.length
   end
 
   def bottom
-    @cursor[:y] = @lines.count - 1
+    @cursor_y = @lines.count - 1
   end
 
   def left
-    if 0 < @cursor[:x] && 0 < current_line.length
-      tail if current_line.length < @cursor[:x]
-      @cursor[:x] -= 1
-    elsif 0 < @cursor[:y]
+    if 0 < @cursor_x && 0 < current_line.length
+      tail if current_line.length < @cursor_x
+      @cursor_x -= 1
+    elsif 0 < @cursor_y
       up
       tail
     end
   end
 
   def right
-    if @cursor[:x] < current_line.length
-      @cursor[:x] += 1
+    if @cursor_x < current_line.length
+      @cursor_x += 1
     else
-      if @cursor[:y] + 1 < @lines.length
+      if @cursor_y + 1 < @lines.length
         down
         head
       end
@@ -87,15 +88,15 @@ class Buffer
   end
 
   def up
-    if 0 < @cursor[:y]
-      @cursor[:y] -= 1
+    if 0 < @cursor_y
+      @cursor_y -= 1
       @prev_c = :UP
     end
   end
 
   def down
-    if @cursor[:y] + 1 < @lines.length
-      @cursor[:y] += 1
+    if @cursor_y + 1 < @lines.length
+      @cursor_y += 1
       @prev_c = :DOWN
     end
   end
@@ -103,8 +104,8 @@ class Buffer
   def put(c)
     line = current_line
     if c.is_a?(String)
-      line = line[0, @cursor[:x]].to_s + c + line[@cursor[:x], 65535].to_s
-      @lines[@cursor[:y]] = line
+      line = line[0, @cursor_x].to_s + c + line[@cursor_x, 65535].to_s
+      @lines[@cursor_y] = line
       right
     else
       case c
@@ -112,25 +113,25 @@ class Buffer
         put " "
         put " "
       when :ENTER
-        new_line = line[@cursor[:x], 65535]
-        @lines[@cursor[:y]] = line[0, @cursor[:x]].to_s
-        @lines.insert(@cursor[:y] + 1, new_line) if new_line
+        new_line = line[@cursor_x, 65535]
+        @lines[@cursor_y] = line[0, @cursor_x].to_s
+        @lines.insert(@cursor_y + 1, new_line) if new_line
         head
         down
       when :BSPACE
-        if 0 < @cursor[:x]
-          if current_line.length == @cursor[:x]
-            @lines[@cursor[:y]][-1] = ""
+        if 0 < @cursor_x
+          if current_line.length == @cursor_x
+            @lines[@cursor_y][-1] = ""
             tail
           else
-            @lines[@cursor[:y]][@cursor[:x] - 1] = ""
+            @lines[@cursor_y][@cursor_x - 1] = ""
             left
           end
         else
-          if 0 < @cursor[:y]
-            @cursor[:x] = @lines[@cursor[:y] - 1].length
-            @lines[@cursor[:y] - 1] += current_line
-            @lines.delete_at @cursor[:y]
+          if 0 < @cursor_y
+            @cursor_x = @lines[@cursor_y - 1].length
+            @lines[@cursor_y - 1] += current_line
+            @lines.delete_at @cursor_y
             up
           end
         end
@@ -149,7 +150,7 @@ class Buffer
   end
 
   def current_tail(n = 1)
-    current_line[@cursor[:x] - n, 65535].to_s
+    current_line[@cursor_x - n, 65535].to_s
   end
 
 end

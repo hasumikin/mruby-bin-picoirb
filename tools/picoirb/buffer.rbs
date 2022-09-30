@@ -1,14 +1,15 @@
 class Buffer
   $buffer_lock: bool
 
-  @cursor: Hash[Symbol, Integer]
+  attr_reader cursor_x: Integer
+  attr_reader cursor_y: Integer
+
   @lines: Array[String]
   @prev_c: Symbol | nil
   @prompt: String
   @prompt_margin: Integer
 
   def initialize: (?String prompt) -> void
-  def cursor: () -> Hash[Symbol, Integer]
   def clear: () -> void
   def dump: () -> String
   def home: () -> void
