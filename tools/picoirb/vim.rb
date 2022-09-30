@@ -32,6 +32,10 @@ class Vim
         terminal.show_cursor
       end
     end
+    if RUBY_ENGINE == "ruby"
+      @terminal.debug_tty = ARGV[1]
+      @terminal.debug "debug start"
+    end
   end
 
   def start

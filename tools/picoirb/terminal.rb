@@ -74,7 +74,7 @@ class Terminal
     end
 
     def debug(text)
-      if @debug_tty && RUBY_ENGINE == 'ruby'
+      if @debug_tty
         system "echo '#{text}' > /dev/pts/#{@debug_tty}"
       end
     end
@@ -254,7 +254,6 @@ class Terminal
       @visual_cursor_x = 0
       @visual_cursor_y = 0
       super
-@debug_tty = "11"
     end
 
     attr_accessor :footer_height
@@ -277,7 +276,12 @@ class Terminal
       content_height = @height - @footer_height
       content_width = @width - 4
       calculate_visual_cursor
-      if (offset = content_height - @content_margin_height - @visual_cursor_y - 1) < 0
+      if (offset = @visual_cursor_y - @content_margin_height) < 0
+        # Cursor is upper than margin top
+        @visual_offset -= offset
+        @visual_offset = 0 if 0 < @visual_offset # Adjustment
+      elsif (offset = content_height - @content_margin_height - @visual_cursor_y - 1) < 0
+        # Cursor is lower than margin bottom (Adjustment scroll will run later)
         @visual_offset += offset
       end
       calculate_visual_cursor
@@ -286,6 +290,7 @@ class Terminal
       home
       first_lineno = nil
       first_line_skip_count = 0
+      # Show the content
       @buffer.lines.each_with_index do |line, lineno|
         [1, ((line.length + content_width - 1) / content_width)].max.times do |i|
           if visual_offset < 0
@@ -308,7 +313,6 @@ class Terminal
         end
         break if content_height == 0
       end
-      debug "l:#{first_lineno} s:#{first_line_skip_count} scroll:#{content_height}"
       # Adjust if cursor is close to the end of file
       if 0 < content_height && @visual_offset < 0
         print "\e[#{content_height}T" # Scroll up
@@ -320,7 +324,7 @@ class Terminal
           [1, (line.length - 1) / content_width + 1].max.times do |i|
             break if lineno == first_lineno && first_line_skip_count - 1 < i
             str = if i == 0
-              "\e[31m#{lineno + 1} ".rjust(4)
+              "\e[31m" + "#{lineno + 1} ".rjust(4)
             else
               "\e[31m    "
             end
@@ -361,7 +365,6 @@ class Terminal
       end
       @visual_cursor_y = y + @buffer.cursor[:x] / content_width + @visual_offset
       @visual_cursor_x = @buffer.cursor[:x] % content_width
-#debug "v #{@visual_cursor_x}, #{@visual_cursor_y} / l #{@buffer.cursor[:x]}, #{@buffer.cursor[:y]}"
     end
 
     def start
@@ -372,6 +375,9 @@ class Terminal
           return
         when 4 # Ctrl-D logout
           return
+        when 12 # Ctrl-L
+          get_size
+          refresh
         else
           yield self, @buffer, c
         end
